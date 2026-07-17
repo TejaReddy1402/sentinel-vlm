@@ -1,3 +1,4 @@
+import os
 import pystac_client
 import planetary_computer
 import rasterio
@@ -6,15 +7,22 @@ from rasterio.warp import transform_bounds
 import numpy as np
 from typing import List, Dict, Tuple, Any
 
+# Set GDAL/CURL network timeouts for cloud environments
+os.environ.setdefault("GDAL_HTTP_TIMEOUT", "60")
+os.environ.setdefault("GDAL_HTTP_CONNECTTIMEOUT", "30")
+os.environ.setdefault("CPL_VSIL_CURL_ALLOWED_EXTENSIONS", ".tif,.tiff")
+os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
 
 BANDS_10M = {"B02", "B03", "B04", "B08"}
 BANDS_20M = {"B11", "B12"}
+STAC_TIMEOUT = 60  # seconds
 
 
 def find_best_scene(bbox: List[float], date_range: Tuple[str, str], max_cloud: int = 20) -> Any:
     catalog = pystac_client.Client.open(
         "https://planetarycomputer.microsoft.com/api/stac/v1",
         modifier=planetary_computer.sign_inplace,
+        timeout=STAC_TIMEOUT,
     )
     search = catalog.search(
         collections=["sentinel-2-l2a"],
@@ -36,24 +44,30 @@ def find_best_scene(bbox: List[float], date_range: Tuple[str, str], max_cloud: i
 
 
 def _read_band(href: str, bbox_wgs84: List[float]) -> np.ndarray:
-    with rasterio.open(href) as src:
-        bbox_native = transform_bounds("EPSG:4326", src.crs, *bbox_wgs84)
-        window = from_bounds(*bbox_native, transform=src.transform)
-        arr = src.read(1, window=window, boundless=True, fill_value=0)
+    env = rasterio.Env(
+        GDAL_HTTP_TIMEOUT=60,
+        GDAL_HTTP_CONNECTTIMEOUT=30,
+        GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+        CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif,.tiff",
+    )
+    with env:
+        with rasterio.open(href) as src:
+            bbox_native = transform_bounds("EPSG:4326", src.crs, *bbox_wgs84)
+            window = from_bounds(*bbox_native, transform=src.transform)
+            arr = src.read(1, window=window, boundless=True, fill_value=0)
     return arr.astype(np.float32)
 
 
 def download_bands(item: Any, bbox: List[float], bands: List[str]) -> Tuple[Dict[str, np.ndarray], Dict]:
-    print(f"  Downloading {len(bands)} bands …")
+    print(f"  Downloading {len(bands)} bands ...")
     data: Dict[str, np.ndarray] = {}
     for band in bands:
-        print(f"    {band} …", end=" ", flush=True)
+        print(f"    {band} ...", flush=True)
         href = item.assets[band].href
         arr = _read_band(href, bbox)
         data[band] = arr
-        print(f"{arr.shape}")
+        print(f"    {band} done: {arr.shape}")
 
-    # Upsample 20 m bands to match 10 m spatial resolution of B04
     ref_shape = data["B04"].shape
     for band in bands:
         if band in BANDS_20M and data[band].shape != ref_shape:
