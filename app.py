@@ -34,7 +34,7 @@ def run_analysis(west, south, east, north, start_date, end_date, max_cloud, prog
     bbox = [float(west), float(south), float(east), float(north)]
 
     # --- Stage 1: acquire ---
-    progress(0.05, desc="Searching Planetary Computer for best scene...")
+    progress(0.05, desc="Searching Earth Search (AWS) for best Sentinel-2 scene...")
     try:
         bands, meta = load_scene(
             bbox=bbox,

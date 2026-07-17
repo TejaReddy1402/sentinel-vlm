@@ -49,16 +49,28 @@ def find_best_scene(bbox: List[float], date_range: Tuple[str, str], max_cloud: i
     return best
 
 
-def _read_band(href: str, bbox_wgs84: List[float]) -> np.ndarray:
+def _read_band(href: str, bbox_wgs84: List[float], target_px: int = 512) -> np.ndarray:
     with rasterio.Env(
         GDAL_HTTP_TIMEOUT=60,
         GDAL_HTTP_CONNECTTIMEOUT=30,
         GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+        CPL_VSIL_CURL_CHUNK_SIZE=10485760,   # 10 MB chunks
     ):
         with rasterio.open(href) as src:
             bbox_native = transform_bounds("EPSG:4326", src.crs, *bbox_wgs84)
             window = from_bounds(*bbox_native, transform=src.transform)
-            arr = src.read(1, window=window, boundless=True, fill_value=0)
+            # Downsample to at most target_px — reads from COG overview, much faster
+            win_h = max(1, int(round(window.height)))
+            win_w = max(1, int(round(window.width)))
+            scale = min(target_px / max(win_h, win_w), 1.0)
+            out_h = max(1, int(win_h * scale))
+            out_w = max(1, int(win_w * scale))
+            arr = src.read(
+                1, window=window,
+                out_shape=(out_h, out_w),
+                resampling=rasterio.enums.Resampling.average,
+                boundless=True, fill_value=0,
+            )
     return arr.astype(np.float32)
 
 
