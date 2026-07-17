@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import gradio as gr
+from PIL import Image
 
 PRESETS = {
     "Rotterdam Port, Netherlands":    [4.0,    51.8,  4.6,   52.0],
@@ -112,13 +113,19 @@ def run_analysis(west, south, east, north, start_date, end_date, max_cloud, prog
 
     dashboard_html = dashboard_path.read_text(encoding="utf-8")
 
+    def load_img(key):
+        p = image_paths.get(key)
+        if p and Path(p).exists():
+            return Image.open(p).convert("RGB")
+        return None
+
     return (
         scene_info,
-        str(image_paths.get("rgb", "")),
-        str(image_paths.get("fused", "")),
-        str(image_paths.get("ndvi", "")),
-        str(image_paths.get("ndwi", "")),
-        str(image_paths.get("ndbi", "")),
+        load_img("rgb"),
+        load_img("fused"),
+        load_img("ndvi"),
+        load_img("ndwi"),
+        load_img("ndbi"),
         metrics_display,
         findings_text,
         summary_md,
