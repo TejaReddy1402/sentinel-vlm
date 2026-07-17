@@ -139,7 +139,29 @@ theme = gr.themes.Base(
     input_background_fill="#0e1b2e",
 )
 
-with gr.Blocks(theme=theme, title="Sentinel-2 VLM Fusion") as demo:
+custom_css = """
+/* dropdown list items */
+.gr-dropdown ul, .gr-dropdown li,
+ul[role="listbox"], ul[role="listbox"] li,
+div[data-testid="dropdown"] ul li,
+.svelte-select-list, .svelte-select-list li,
+.option { color: #edf7ff !important; background-color: #0e1b2e !important; }
+
+/* dropdown selected value */
+.svelte-select input, .svelte-select .value-container,
+div[data-testid="dropdown"] input,
+div[data-testid="dropdown"] .wrap { color: #edf7ff !important; }
+
+/* dropdown container */
+div[data-testid="dropdown"] .wrap,
+.svelte-select { background-color: #0e1b2e !important; border-color: #28425f !important; }
+
+/* hover state */
+ul[role="listbox"] li:hover,
+.option:hover { background-color: #1e3a5f !important; }
+"""
+
+with gr.Blocks(theme=theme, title="Sentinel-2 VLM Fusion", css=custom_css) as demo:
     gr.Markdown(
         """
         # Sentinel-2 Optical Fusion + VLM Analysis
