@@ -161,7 +161,7 @@ ul[role="listbox"] li:hover,
 .option:hover { background-color: #1e3a5f !important; }
 """
 
-with gr.Blocks(theme=theme, title="Sentinel-2 VLM Fusion", css=custom_css) as demo:
+with gr.Blocks(title="Sentinel-2 VLM Fusion") as demo:
     gr.Markdown(
         """
         # Sentinel-2 Optical Fusion + VLM Analysis
@@ -238,4 +238,9 @@ with gr.Blocks(theme=theme, title="Sentinel-2 VLM Fusion", css=custom_css) as de
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
-    demo.launch(server_name="0.0.0.0", server_port=port)
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=port,
+        theme=theme,
+        css=custom_css,
+    )
