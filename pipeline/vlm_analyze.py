@@ -1,19 +1,16 @@
-import base64
-import io
 import os
 import json
-from pathlib import Path
 from typing import Dict, Any
 
 from groq import Groq
-from PIL import Image
 
 
 SYSTEM_PROMPT = (
     "You are an expert remote sensing and geospatial analyst. "
-    "You will be shown Sentinel-2 satellite imagery products: "
-    "true-colour RGB, false-colour NIR composite, NDVI, NDWI, NDBI, and a fused evidence overlay. "
-    "Analyse the scene carefully and return ONLY a valid JSON object — no markdown fences, no explanation. "
+    "You will receive Sentinel-2 L2A spectral metrics and scene metadata for a location on Earth. "
+    "Using the quantitative spectral indices (NDVI, NDWI, NDBI) and derived land-cover fractions, "
+    "produce a rigorous scientific analysis of the scene. "
+    "Return ONLY a valid JSON object — no markdown fences, no explanation. "
     "The JSON must have exactly these keys: "
     "findings (list of {type, confidence, description}), "
     "dominant_landcover (string), "
@@ -26,26 +23,24 @@ SYSTEM_PROMPT = (
 
 def _build_prompt(metrics: Dict, meta: Dict) -> str:
     return (
-        f"Scene metadata: {json.dumps(meta, indent=2)}\n\n"
-        f"Computed spectral metrics:\n"
-        f"  Water share (NDWI>0.2): {metrics['water_share']:.1%}\n"
-        f"  Vegetation share (NDVI>0.3): {metrics['vegetation_share']:.1%}\n"
-        f"  Built-up share (NDBI>0): {metrics['built_share']:.1%}\n"
-        f"  Port/industrial candidate share: {metrics['port_candidate_share']:.1%}\n"
-        f"  Road candidate share: {metrics['road_candidate_share']:.1%}\n"
-        f"  Mean NDVI: {metrics['ndvi_mean']:.3f}\n"
-        f"  Mean NDWI: {metrics['ndwi_mean']:.3f}\n"
-        f"  Mean NDBI: {metrics['ndbi_mean']:.3f}\n\n"
-        "The images (in order) are: True Colour RGB, NDVI, NDWI, NDBI, Fused Evidence Overlay.\n"
-        "Return ONLY the JSON object."
+        f"Scene metadata:\n{json.dumps(meta, indent=2)}\n\n"
+        f"Spectral metrics derived from Sentinel-2 L2A bands:\n"
+        f"  Water fraction (NDWI > 0.2):          {metrics['water_share']:.1%}\n"
+        f"  Vegetation fraction (NDVI > 0.3):     {metrics['vegetation_share']:.1%}\n"
+        f"  Built-up fraction (NDBI > 0):         {metrics['built_share']:.1%}\n"
+        f"  Port/industrial candidate fraction:   {metrics['port_candidate_share']:.1%}\n"
+        f"  Road/linear feature fraction:         {metrics['road_candidate_share']:.1%}\n"
+        f"  Mean NDVI (vegetation index):         {metrics['ndvi_mean']:.4f}\n"
+        f"  Mean NDWI (water index):              {metrics['ndwi_mean']:.4f}\n"
+        f"  Mean NDBI (built-up index):           {metrics['ndbi_mean']:.4f}\n"
+        f"  Estimated analysis confidence:        {metrics['estimated_confidence']:.4f}\n\n"
+        "NDVI interpretation: >0.6 dense forest/crops, 0.3-0.6 sparse veg/grassland, "
+        "0.1-0.3 bare soil, <0.1 water/urban/rock.\n"
+        "NDWI interpretation: >0.2 open water, -0.2 to 0.2 mixed, <-0.2 dry land.\n"
+        "NDBI interpretation: >0.1 high-density urban/industrial, 0-0.1 suburban, <0 vegetated.\n\n"
+        "Based on these spectral signatures and the known geography of the bounding box, "
+        "provide a detailed scientific analysis. Return ONLY the JSON object."
     )
-
-
-def _b64_png(path: Path) -> str:
-    img = Image.open(path).convert("RGB")
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode()
 
 
 def _extract_json(text: str) -> Dict:
@@ -61,10 +56,10 @@ def _extract_json(text: str) -> Dict:
 
 
 def analyze_scene(
-    image_paths: Dict[str, Path],
+    image_paths: Dict,
     metrics: Dict,
     scene_meta: Dict,
-    model: str = "meta-llama/llama-4-scout-17b-16e-instruct",
+    model: str = "llama-3.3-70b-versatile",
 ) -> Dict[str, Any]:
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
@@ -72,26 +67,14 @@ def analyze_scene(
 
     client = Groq(api_key=api_key)
 
-    display_order = ["rgb", "ndvi", "ndwi", "ndbi", "fused"]  # max 5 for Groq
-    content = []
-    img_count = 0
-    for key in display_order:
-        p = image_paths.get(key)
-        if p and Path(p).exists():
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{_b64_png(Path(p))}"},
-            })
-            img_count += 1
+    prompt = _build_prompt(metrics, scene_meta)
+    print(f"  Sending spectral metrics to {model} ...")
 
-    content.append({"type": "text", "text": _build_prompt(metrics, scene_meta)})
-
-    print(f"  Sending {img_count} images to {model} …")
     response = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": content},
+            {"role": "user", "content": prompt},
         ],
         max_tokens=4096,
         temperature=0.2,

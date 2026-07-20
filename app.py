@@ -68,7 +68,7 @@ def run_analysis(west, south, east, north, start_date, end_date, max_cloud, prog
     )
 
     # --- Stage 3: VLM ---
-    progress(0.65, desc="Running Llama 4 Scout vision analysis via Groq ...")
+    progress(0.65, desc="Running LLM analysis via Groq ...")
     analysis = analyze_scene(image_paths=image_paths, metrics=metrics, scene_meta=meta)
 
     # --- Stage 4: dashboard ---
@@ -173,7 +173,7 @@ with gr.Blocks(title="Sentinel-2 VLM Fusion") as demo:
         """
         # Sentinel-2 Optical Fusion + VLM Analysis
         Real Sentinel-2 L2A data from Microsoft Planetary Computer
-        Vision analysis by **Llama 4 Scout** via Groq (free)
+        Spectral analysis by **Llama 3.3 70B** via Groq (free)
         """
     )
 
@@ -220,7 +220,7 @@ with gr.Blocks(title="Sentinel-2 VLM Fusion") as demo:
         img_ndbi = gr.Image(label="NDBI (Built-up)",   show_label=True)
 
     gr.Markdown("---")
-    gr.Markdown("### VLM Analysis — Llama 4 Scout")
+    gr.Markdown("### Spectral Analysis — Llama 3.3 70B via Groq")
     with gr.Row():
         findings_out = gr.Markdown(label="Findings")
         summary_out  = gr.Markdown(label="Summary & Limitations")
